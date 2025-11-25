@@ -7,7 +7,7 @@ from mlxtend.preprocessing import TransactionEncoder
 from mlxtend.frequent_patterns import apriori, association_rules
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score, accuracy_score, classification_report
+from sklearn.metrics import silhouette_score, accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.naive_bayes import MultinomialNB
@@ -15,11 +15,11 @@ import networkx as nx
 
 
 # -------------------------------------------------------------
-# 1. K-MEANS CLUSTERING
+# 1. K-MEANS CLUSTERING  (Simple Version)
 # -------------------------------------------------------------
 def run_kmeans(dataset_path):
     df = pd.read_csv(dataset_path)
-    X = df[['Age','Annual_Income_(k$)','Spending_Score']]
+    X = df[['Age', 'Annual_Income_(k$)', 'Spending_Score']]
     X_scaled = StandardScaler().fit_transform(X)
 
     inertia, sil = [], []
@@ -29,14 +29,12 @@ def run_kmeans(dataset_path):
         inertia.append(km.inertia_)
         sil.append(silhouette_score(X_scaled, labels))
 
-    plt.figure(figsize=(12,5))
-    plt.subplot(1,2,1)
-    plt.plot(range(2,11), inertia, marker='o')
+    plt.plot(inertia, marker='o')
     plt.title("Elbow Method")
     plt.grid(True)
+    plt.show()
 
-    plt.subplot(1,2,2)
-    plt.plot(range(2,11), sil, marker='o')
+    plt.plot(sil, marker='o')
     plt.title("Silhouette Scores")
     plt.grid(True)
     plt.show()
@@ -44,17 +42,27 @@ def run_kmeans(dataset_path):
     kmeans = KMeans(n_clusters=5, random_state=42)
     df['Cluster'] = kmeans.fit_predict(X_scaled)
 
-    print("\nCluster Profile:\n")
-    print(df.groupby('Cluster')[['Age','Annual_Income_(k$)','Spending_Score']].mean())
+    print("\nCluster Profile (Mean Values):\n")
+    print(df.groupby('Cluster')[['Age', 'Annual_Income_(k$)', 'Spending_Score']].mean())
 
-    sns.scatterplot(x=df['Annual_Income_(k$)'], y=df['Spending_Score'],
-                    hue=df['Cluster'], palette='viridis', s=80)
+    sns.scatterplot(
+        x=df['Annual_Income_(k$)'],
+        y=df['Spending_Score'],
+        hue=df['Cluster'],
+        palette='viridis',
+        s=80
+    )
     plt.title("Customer Segments")
     plt.grid(True)
     plt.show()
 
-    sns.scatterplot(x=X_scaled[:,1], y=X_scaled[:,2],
-                    hue=df['Cluster'], palette='viridis', s=80)
+    sns.scatterplot(
+        x=X_scaled[:, 1],
+        y=X_scaled[:, 2],
+        hue=df['Cluster'],
+        palette='viridis',
+        s=80
+    )
     plt.title("Scaled Clusters")
     plt.xlabel("Scaled Income")
     plt.ylabel("Scaled Score")
@@ -65,7 +73,7 @@ def run_kmeans(dataset_path):
 
 
 # -------------------------------------------------------------
-# 2. APRIORI
+# 2. APRIORI ANALYSIS  (Simple Version)
 # -------------------------------------------------------------
 def run_apriori(dataset_path):
     df = pd.read_csv(dataset_path, sep=';', on_bad_lines='skip')
@@ -89,29 +97,34 @@ def run_apriori(dataset_path):
 
 
 # -------------------------------------------------------------
-# 3. SENTIMENT ANALYSIS
+# 3. SENTIMENT ANALYSIS  (Simple Version)
 # -------------------------------------------------------------
-def clean_text(t):
-    t = re.sub('[^a-zA-Z]', ' ', str(t)).lower()
-    words = t.split()
-    stop = set(nltk.corpus.stopwords.words('english'))
-    return " ".join(w for w in words if w not in stop)
-
-
 def run_sentiment(dataset_path):
-    nltk.download('stopwords')
-
     df = pd.read_csv(dataset_path)
     df = df.dropna(subset=['reviews.text', 'reviews.rating'])
 
-    df['full_review'] = df['reviews.title'].fillna("") + " " + df['reviews.text']
-    df['clean'] = df['full_review'].apply(clean_text)
+    df['full_review'] = df['reviews.title'].fillna('') + " " + df['reviews.text']
+
     df['sentiment'] = df['reviews.rating'].apply(
-        lambda r: 'positive' if r > 4 else ('neutral' if r == 3 else 'negative')
+        lambda r: 'positive' if r >= 4 else ('neutral' if r == 3 else 'negative')
     )
 
+    nltk.download('stopwords')
+    stop_words = set(nltk.corpus.stopwords.words('english'))
+
+    def clean_text(t):
+        t = re.sub('[^a-zA-Z]', ' ', str(t)).lower()
+        words = t.split()
+        return " ".join(w for w in words if w not in stop_words)
+
+    df['clean'] = df['full_review'].apply(clean_text)
+
     X_train, X_test, y_train, y_test = train_test_split(
-        df['clean'], df['sentiment'], test_size=0.2, random_state=42, stratify=df['sentiment']
+        df['clean'],
+        df['sentiment'],
+        test_size=0.2,
+        random_state=42,
+        stratify=df['sentiment']
     )
 
     cv = CountVectorizer()
@@ -123,32 +136,54 @@ def run_sentiment(dataset_path):
 
     y_pred = model.predict(X_test_vec)
 
-    print("\nAccuracy:", accuracy_score(y_test, y_pred))
+    print("Accuracy:", round(accuracy_score(y_test, y_pred) * 100, 2), "%")
     print("\nClassification Report:\n", classification_report(y_test, y_pred))
+
+    cm = confusion_matrix(y_test, y_pred,
+                          labels=['negative', 'neutral', 'positive'])
+
+    sns.heatmap(
+        cm, annot=True, cmap='Blues', fmt='d',
+        xticklabels=['negative', 'neutral', 'positive'],
+        yticklabels=['negative', 'neutral', 'positive']
+    )
+    plt.title("Confusion Matrix")
+    plt.show()
 
     return model, cv
 
 
 # -------------------------------------------------------------
-# 4. SOCIAL NETWORK ANALYSIS
+# 4. SOCIAL NETWORK ANALYSIS  (Simple Version)
 # -------------------------------------------------------------
 def run_sna(dataset_path):
     df = pd.read_csv(dataset_path, sep=' ', names=['user_1', 'user_2'])
+
     G = nx.from_pandas_edgelist(df, 'user_1', 'user_2')
 
     degree = dict(G.degree())
-    betweenness = nx.betweenness_centrality(G, k=min(200, len(G)), seed=42)
+
+    k = min(200, G.number_of_nodes())
+    betweenness = nx.betweenness_centrality(G, k=k, seed=42)
     closeness = nx.closeness_centrality(G)
 
-    print("\nTop 5 by Degree:", sorted(degree.items(), key=lambda x: x[1], reverse=True)[:5])
-    print("\nTop 5 by Betweenness:", sorted(betweenness.items(), key=lambda x: x[1], reverse=True)[:5])
-    print("\nTop 5 by Closeness:", sorted(closeness.items(), key=lambda x: x[1], reverse=True)[:5])
+    print("\nTop 5 by Degree Centrality:")
+    for u, s in sorted(degree.items(), key=lambda x: x[1], reverse=True)[:5]:
+        print(f"User {u}: {s}")
+
+    print("\nTop 5 by Betweenness:")
+    for u, s in sorted(betweenness.items(), key=lambda x: x[1], reverse=True)[:5]:
+        print(f"User {u}: {s:.4f}")
+
+    print("\nTop 5 by Closeness:")
+    for u, s in sorted(closeness.items(), key=lambda x: x[1], reverse=True)[:5]:
+        print(f"User {u}: {s:.4f}")
 
     return degree, betweenness, closeness
 
 
 # -------------------------------------------------------------
-# 5. RUN ALL
+# 5. RUN ALL MODULES
 # -------------------------------------------------------------
 def run_all(kmeans_file, apriori_file, sentiment_file, sna_file):
     print("\n=== K-MEANS CLUSTERING ===")
