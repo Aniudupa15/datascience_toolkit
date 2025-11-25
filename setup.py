@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="datascience_toolkit",
+    name="datascience_toolkitt",
     version="1.0.0",
     packages=find_packages(),
     install_requires=[
